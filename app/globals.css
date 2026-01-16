@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import "tailwindcss";
+
+/* Custom theme configuration for Tailwind v4 */
+@theme {
+  /* NES-inspired color palette */
+  --color-nes-black: #0f0f0f;
+  --color-nes-darkgray: #1a1a2e;
+  --color-nes-gray: #4a4a68;
+  --color-nes-white: #fcfcfc;
+  --color-nes-red: #ff004d;
+  --color-nes-orange: #ffa300;
+  --color-nes-yellow: #ffec27;
+  --color-nes-green: #00e436;
+  --color-nes-cyan: #29adff;
+  --color-nes-blue: #1d2b53;
+  --color-nes-purple: #7e2553;
+  --color-nes-pink: #ff77a8;
+  --color-nes-gold: #ffcc00;
+
+  /* Font family */
+  --font-pixel: 'Press Start 2P', cursive;
+
+  /* Custom animations */
+  --animate-brick-drop: brick-drop 0.3s ease-out;
+  --animate-float: float 3s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-twinkle: twinkle 4s ease-in-out infinite;
+
+  @keyframes brick-drop {
+    0% { transform: translateY(-20px); opacity: 0; }
+    60% { transform: translateY(2px); }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 5px currentColor; }
+    50% { box-shadow: 0 0 20px currentColor, 0 0 30px currentColor; }
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+}
+
+:root {
+  --nes-black: #0f0f0f;
+  --nes-darkgray: #1a1a2e;
+  --nes-gray: #4a4a68;
+  --nes-white: #fcfcfc;
+  --nes-red: #ff004d;
+  --nes-orange: #ffa300;
+  --nes-yellow: #ffec27;
+  --nes-green: #00e436;
+  --nes-cyan: #29adff;
+  --nes-blue: #1d2b53;
+  --nes-purple: #7e2553;
+  --nes-pink: #ff77a8;
+  --nes-gold: #ffcc00;
+}
+
+* {
+  image-rendering: pixelated;
+}
+
+body {
+  background-color: var(--nes-black);
+  color: var(--nes-white);
+  font-family: 'Press Start 2P', cursive;
+}
+
+/* Pixel-perfect borders */
+.pixel-border {
+  box-shadow:
+    inset -4px -4px 0 0 var(--nes-gray),
+    inset 4px 4px 0 0 var(--nes-white),
+    inset -8px -8px 0 0 var(--nes-darkgray),
+    inset 8px 8px 0 0 #8d8da5;
+}
+
+.pixel-border-dark {
+  box-shadow:
+    inset -4px -4px 0 0 #000,
+    inset 4px 4px 0 0 var(--nes-gray),
+    inset -8px -8px 0 0 #000,
+    inset 8px 8px 0 0 var(--nes-darkgray);
+}
+
+/* Scanline effect */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+}
+
+/* Brick styling */
+.brick {
+  width: 24px;
+  height: 12px;
+  position: relative;
+  box-shadow:
+    inset -2px -2px 0 0 rgba(0, 0, 0, 0.3),
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+.brick::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Content visibility for performance */
+.brick-pile {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 240px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  background: var(--nes-darkgray);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--nes-gray);
+  border: 2px solid var(--nes-darkgray);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--nes-white);
+}
+
+/* Glow effect for text */
+.text-glow {
+  text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+}
+
+/* Pulse animation for new bricks */
+@keyframes brickPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.5); }
+}
+
+.brick-new {
+  animation: brickPulse 0.5s ease-out;
+}

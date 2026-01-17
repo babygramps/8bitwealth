@@ -543,13 +543,39 @@ function Scene({ profile, growthBricks, startingWealth }: { profile: WealthProfi
         fov={50}
       />
       
-      {/* Controls - orbit around origin (human) */}
+      {/* Controls - full 3D navigation, mobile-friendly */}
       <OrbitControls
         enablePan={true}
         enableZoom={true}
-        minDistance={2}
-        maxDistance={500}
-        maxPolarAngle={Math.PI / 2.1}
+        enableRotate={true}
+        // Allow full rotation (no polar angle limit so user can look from below)
+        minPolarAngle={0}
+        maxPolarAngle={Math.PI}
+        // Zoom limits
+        minDistance={1}
+        maxDistance={1000}
+        // Pan settings - screen space panning is more intuitive
+        screenSpacePanning={true}
+        panSpeed={1.5}
+        // Rotation speed
+        rotateSpeed={0.8}
+        // Zoom speed
+        zoomSpeed={1.2}
+        // Touch settings for mobile
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,   // One finger = rotate
+          TWO: THREE.TOUCH.DOLLY_PAN // Two fingers = zoom + pan
+        }}
+        // Mouse buttons
+        mouseButtons={{
+          LEFT: THREE.MOUSE.ROTATE,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN
+        }}
+        // Smooth damping for better feel
+        enableDamping={true}
+        dampingFactor={0.1}
+        // Initial target (human center)
         target={[0, HUMAN_HEIGHT / 2, 0]}
       />
 
@@ -699,9 +725,12 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
         </Canvas>
       </div>
 
-      {/* Legend */}
-      <div className="mt-2 text-[6px] text-nes-gray text-center">
-        Giant cubes = $1B each | Brick stacks = $1K each (10 x $100 bills) | All real scale!
+      {/* Legend and controls hint */}
+      <div className="mt-2 text-[6px] text-nes-gray text-center space-y-1">
+        <div>Giant cubes = $1B each | Brick stacks = $1K each (10 x $100 bills) | All real scale!</div>
+        <div className="text-[5px] text-nes-cyan">
+          🖱️ Drag to rotate | Right-click drag to pan | Scroll to zoom | 📱 1 finger rotate, 2 fingers pan/zoom
+        </div>
       </div>
     </div>
   )

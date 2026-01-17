@@ -8,23 +8,22 @@ export default function StatsPanel() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      // Use functional setState to avoid stale closures
       setElapsedSeconds(prev => prev + 1)
     }, 1000)
 
     return () => clearInterval(interval)
   }, [])
 
+  // Get just Elon Musk
+  const elonMusk = BILLIONAIRES.find(b => b.id === 'musk') || BILLIONAIRES[0]
+  
   // Calculate totals
   const elapsedMs = elapsedSeconds * 1000
   
-  const billionaireTotal = BILLIONAIRES.reduce((sum, b) => {
-    return sum + (elapsedMs * getWealthPerMs(b))
-  }, 0)
-  
+  const muskTotal = elapsedMs * getWealthPerMs(elonMusk)
   const averageTotal = elapsedMs * getWealthPerMs(AVERAGE_AMERICAN)
   
-  const ratio = averageTotal > 0 ? Math.round(billionaireTotal / averageTotal) : 0
+  const ratio = averageTotal > 0 ? Math.round(muskTotal / averageTotal) : 0
 
   // Format time
   const formatTime = useCallback((seconds: number) => {
@@ -47,20 +46,20 @@ export default function StatsPanel() {
             </div>
           </div>
 
-          {/* Billionaire combined earnings */}
+          {/* Musk earnings */}
           <div className="space-y-1">
             <div className="text-[6px] md:text-[8px] text-nes-gray uppercase">
-              3 Billionaires Made
+              Elon Musk Made
             </div>
             <div className="text-sm md:text-lg text-nes-gold text-glow font-pixel">
-              💎 {formatCurrency(billionaireTotal)}
+              🚀 {formatCurrency(muskTotal)}
             </div>
           </div>
 
           {/* Average American earnings */}
           <div className="space-y-1">
             <div className="text-[6px] md:text-[8px] text-nes-gray uppercase">
-              Avg American Made
+              Avg Household Made
             </div>
             <div className="text-sm md:text-lg text-nes-green text-glow font-pixel">
               🏠 {formatCurrency(averageTotal)}
@@ -70,17 +69,17 @@ export default function StatsPanel() {
           {/* Wealth ratio */}
           <div className="space-y-1">
             <div className="text-[6px] md:text-[8px] text-nes-gray uppercase">
-              Wealth Ratio
+              Musk Earns
             </div>
             <div className="text-sm md:text-lg text-nes-red text-glow font-pixel">
-              ⚡ {ratio.toLocaleString()}x
+              ⚡ {ratio.toLocaleString()}x faster
             </div>
           </div>
         </div>
 
         {/* Fun fact */}
         <div className="mt-3 text-center text-[6px] md:text-[8px] text-nes-pink">
-          💡 In the time you&apos;ve watched, billionaires earned {ratio.toLocaleString()}x more than the average American
+          💡 Musk earns ~$787/sec. Avg household earns ~$0.0016/sec. That&apos;s {ratio.toLocaleString()}x difference.
         </div>
       </div>
     </div>

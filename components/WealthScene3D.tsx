@@ -1,11 +1,12 @@
 'use client'
 
-import { memo, Suspense, useMemo, useRef, useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { memo, Suspense, useMemo, useRef, useEffect, useState, useCallback } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Text, Billboard, Instances, Instance } from '@react-three/drei'
 import { WealthProfile, formatCurrency, formatPerSecond, MAX_BRICKS_PER_PILE } from '@/lib/wealth-data'
 import { useWealthAnimation } from '@/lib/use-wealth-animation'
 import * as THREE from 'three'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 interface WealthScene3DProps {
   profile: WealthProfile
@@ -52,9 +53,23 @@ function Ground({ size }: { size: number }) {
   )
 }
 
-// Human figure for scale (5'8" = 5.67 feet)
-function HumanFigure({ position }: { position: [number, number, number] }) {
-  const height = HUMAN_HEIGHT
+// Heights in feet
+const AVERAGE_HUMAN_HEIGHT = 5.67 * UNIT_SCALE // 5'8" average
+const ELON_MUSK_HEIGHT = 6.17 * UNIT_SCALE // 6'2"
+
+// Human figure for scale - can be customized with name and height
+function HumanFigure({ 
+  position, 
+  name = "HUMAN",
+  heightFeet = 5.67,
+  heightLabel = "5'8\""
+}: { 
+  position: [number, number, number]
+  name?: string
+  heightFeet?: number
+  heightLabel?: string
+}) {
+  const height = heightFeet * UNIT_SCALE
   const headRadius = height * 0.07
   const bodyHeight = height * 0.35
   const legHeight = height * 0.45
@@ -107,7 +122,7 @@ function HumanFigure({ position }: { position: [number, number, number] }) {
           outlineWidth={0.02}
           outlineColor="#000000"
         >
-          HUMAN (5'8")
+          {name} ({heightLabel})
         </Text>
       </Billboard>
     </group>
@@ -509,8 +524,50 @@ function BillionCubeLabels({
   )
 }
 
+// Camera controller component with reset functionality
+function CameraController({ 
+  controlsRef, 
+  cameraDistance,
+  resetTrigger
+}: { 
+  controlsRef: React.RefObject<OrbitControlsImpl | null>
+  cameraDistance: number
+  resetTrigger: number
+}) {
+  const { camera } = useThree()
+  
+  // Reset camera when trigger changes
+  useEffect(() => {
+    if (resetTrigger > 0 && controlsRef.current) {
+      // Reset camera position
+      camera.position.set(
+        cameraDistance * 0.7,
+        cameraDistance * 0.4,
+        cameraDistance * 0.7
+      )
+      // Reset target to human center
+      controlsRef.current.target.set(0, HUMAN_HEIGHT / 2, 0)
+      controlsRef.current.update()
+    }
+  }, [resetTrigger, camera, cameraDistance, controlsRef])
+  
+  return null
+}
+
 // 3D Scene contents
-function Scene({ profile, growthBricks, startingWealth }: { profile: WealthProfile; growthBricks: number; startingWealth: number }) {
+function Scene({ 
+  profile, 
+  growthBricks, 
+  startingWealth,
+  controlsRef,
+  resetTrigger
+}: { 
+  profile: WealthProfile
+  growthBricks: number
+  startingWealth: number
+  controlsRef: React.RefObject<OrbitControlsImpl | null>
+  resetTrigger: number
+}) {
   // Calculate number of billion dollar cubes (for billionaires)
   const billionCount = Math.floor(startingWealth / 1_000_000_000)
   const isBillionaire = billionCount > 0
@@ -523,10 +580,9 @@ function Scene({ profile, growthBricks, startingWealth }: { profile: WealthProfi
     ? Math.min(billionCount, 5) * BILLION_CUBE_SIZE * 1.3
     : Math.min(Math.ceil(startingBrickCount / 50), 10) * THOUSAND_BRICK.width * 1.2
   
-  // Camera distance based on content - human is at center (0,0,0)
-  const cameraDistance = isBillionaire 
-    ? Math.max(30, billionCount * 5, gridWidth * 1.5)
-    : Math.max(15, gridWidth * 3)
+  // Camera distance - always start focused on human (same for billionaire and non-billionaire)
+  // User can zoom out to see the wealth cubes
+  const cameraDistance = 15 // Close enough to see the human clearly
   const groundSize = isBillionaire 
     ? Math.max(100, gridWidth * 2, billionCount * 15)
     : Math.max(30, gridWidth * 4)
@@ -536,6 +592,13 @@ function Scene({ profile, growthBricks, startingWealth }: { profile: WealthProfi
   
   return (
     <>
+      {/* Camera controller for reset functionality */}
+      <CameraController 
+        controlsRef={controlsRef} 
+        cameraDistance={cameraDistance}
+        resetTrigger={resetTrigger}
+      />
+      
       {/* Camera - looking at human at origin */}
       <PerspectiveCamera
         makeDefault
@@ -545,6 +608,7 @@ function Scene({ profile, growthBricks, startingWealth }: { profile: WealthProfi
       
       {/* Controls - full 3D navigation, mobile-friendly */}
       <OrbitControls
+        ref={controlsRef}
         enablePan={true}
         enableZoom={true}
         enableRotate={true}
@@ -598,7 +662,12 @@ function Scene({ profile, growthBricks, startingWealth }: { profile: WealthProfi
       <Ground size={groundSize} />
 
       {/* Human figure at CENTER (origin) */}
-      <HumanFigure position={[0, 0, 0]} />
+      <HumanFigure 
+        position={[0, 0, 0]} 
+        name={isBillionaire ? profile.name.split(' ')[0].toUpperCase() + ' ' + profile.name.split(' ').slice(1).join(' ').toUpperCase() : "AVG AMERICAN"}
+        heightFeet={isBillionaire ? 6.17 : 5.67}
+        heightLabel={isBillionaire ? "6'2\"" : "5'8\""}
+      />
       
       {/* Growth pile next to human (to the right) */}
       {growthBricks > 0 && (
@@ -686,6 +755,12 @@ function Scene({ profile, growthBricks, startingWealth }: { profile: WealthProfi
 // Main component with Canvas wrapper
 const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProps) {
   const { displayWealth, startingWealth, growthAmount, growthBricks } = useWealthAnimation(profile)
+  const controlsRef = useRef<OrbitControlsImpl>(null)
+  const [resetTrigger, setResetTrigger] = useState(0)
+  
+  const handleResetView = useCallback(() => {
+    setResetTrigger(prev => prev + 1)
+  }, [])
 
   return (
     <div className="flex flex-col items-center p-4">
@@ -716,11 +791,26 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
         </div>
       </div>
 
-      {/* 3D Canvas */}
-      <div className="w-full h-[400px] md:h-[500px] pixel-border-dark bg-nes-black/50 rounded overflow-hidden">
+      {/* 3D Canvas with reset button */}
+      <div className="relative w-full h-[400px] md:h-[500px] pixel-border-dark bg-nes-black/50 rounded overflow-hidden">
+        {/* Reset View Button */}
+        <button
+          onClick={handleResetView}
+          className="absolute top-2 right-2 z-10 px-2 py-1 bg-nes-darkgray/90 hover:bg-nes-gray/90 border border-nes-gray rounded text-[8px] text-nes-cyan transition-colors active:scale-95"
+          title="Reset camera to center on human"
+        >
+          🏠 Reset View
+        </button>
+        
         <Canvas shadows>
           <Suspense fallback={null}>
-            <Scene profile={profile} growthBricks={growthBricks} startingWealth={startingWealth} />
+            <Scene 
+              profile={profile} 
+              growthBricks={growthBricks} 
+              startingWealth={startingWealth}
+              controlsRef={controlsRef}
+              resetTrigger={resetTrigger}
+            />
           </Suspense>
         </Canvas>
       </div>

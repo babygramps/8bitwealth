@@ -755,13 +755,29 @@ function CameraController({
 }) {
   const { camera } = useThree()
   
-  // Set initial camera target on mount
+  // Set initial camera position AND target on mount
   useEffect(() => {
+    // Set camera POSITION on mount (not just target)
+    if (isBillionaire) {
+      camera.position.set(
+        cameraDistance * 0.7,
+        cameraDistance * 0.4,
+        cameraDistance * 0.7
+      )
+    } else {
+      // Average household: show full person with penny pile
+      camera.position.set(
+        cameraDistance * 0.6,
+        cameraDistance * 0.35,
+        cameraDistance * 0.6
+      )
+    }
+    
     if (controlsRef.current) {
       controlsRef.current.target.set(cameraTargetX, cameraTargetY, 0)
       controlsRef.current.update()
     }
-  }, [controlsRef, cameraTargetX, cameraTargetY])
+  }, [controlsRef, cameraTargetX, cameraTargetY, camera, cameraDistance, isBillionaire])
   
   // Reset camera when trigger changes
   useEffect(() => {

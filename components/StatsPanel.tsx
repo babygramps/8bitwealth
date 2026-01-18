@@ -1,27 +1,41 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { BILLIONAIRES, AVERAGE_AMERICAN, formatCurrency, getWealthPerMs } from '@/lib/wealth-data'
 
 export default function StatsPanel() {
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const startTimeRef = useRef<number | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setElapsedSeconds(prev => prev + 1)
-    }, 1000)
-
-    return () => clearInterval(interval)
+    const animate = (timestamp: number) => {
+      if (startTimeRef.current === null) {
+        startTimeRef.current = timestamp
+      }
+      setElapsedMs(timestamp - startTimeRef.current)
+      animationFrameRef.current = requestAnimationFrame(animate)
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(animate)
+    
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
   }, [])
+  
+  // Convert to seconds for display
+  const elapsedSeconds = Math.floor(elapsedMs / 1000)
 
   // Get just Elon Musk
   const elonMusk = BILLIONAIRES.find(b => b.id === 'musk') || BILLIONAIRES[0]
   
-  // Calculate totals
-  const elapsedMs = elapsedSeconds * 1000
-  
+  // Calculate totals using continuous elapsedMs (same timing method as useWealthAnimation)
   const muskTotal = elapsedMs * getWealthPerMs(elonMusk)
   const averageTotal = elapsedMs * getWealthPerMs(AVERAGE_AMERICAN)
+  
   
   const ratio = averageTotal > 0 ? Math.round(muskTotal / averageTotal) : 0
 

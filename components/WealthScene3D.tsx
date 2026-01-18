@@ -1,8 +1,8 @@
 'use client'
 
 import { memo, Suspense, useMemo, useRef, useEffect, useState, useCallback } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, PerspectiveCamera, Text, Billboard, Instances, Instance } from '@react-three/drei'
+import { Canvas, useThree, useFrame } from '@react-three/fiber'
+import { OrbitControls, PerspectiveCamera, Text, Billboard, Instances, Instance, Cylinder } from '@react-three/drei'
 import { WealthProfile, formatCurrency, formatPerSecond, MAX_BRICKS_PER_PILE } from '@/lib/wealth-data'
 import { useWealthAnimation } from '@/lib/use-wealth-animation'
 import * as THREE from 'three'
@@ -214,6 +214,219 @@ function ThousandDollarPile({
           </Text>
         </Billboard>
       )}
+    </group>
+  )
+}
+
+// Penny dimensions (real scale: 0.75" diameter, 0.0598" thick)
+const PENNY_RADIUS = (0.75 / 12 / 2) * UNIT_SCALE // ~0.03125 feet radius
+const PENNY_THICKNESS = (0.0598 / 12) * UNIT_SCALE // ~0.005 feet
+
+// Single animated penny that falls flat (horizontally) and lands on the pile
+// Only animates when triggered by a new penny being earned
+function FallingPenny({ 
+  startY = 3,
+  endY = 0,
+  duration = 1.5,
+  trigger = 0, // Changes when a new penny should fall
+}: { 
+  startY?: number
+  endY?: number
+  duration?: number
+  trigger?: number // Penny count - animation triggers when this increases
+}) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const startTime = useRef(0)
+  const lastTrigger = useRef(trigger)
+  
+  
+  // Trigger animation when penny count increases
+  useEffect(() => {
+    if (trigger > lastTrigger.current) {
+      lastTrigger.current = trigger
+      setVisible(true)
+      setIsAnimating(true)
+      startTime.current = 0
+    }
+  }, [trigger])
+  
+  useFrame((state) => {
+    if (!meshRef.current || !isAnimating) return
+    
+    if (startTime.current === 0) {
+      startTime.current = state.clock.elapsedTime
+    }
+    
+    const elapsed = state.clock.elapsedTime - startTime.current
+    const progress = Math.min(elapsed / duration, 1)
+    
+    // Eased fall with bounce effect
+    let easeProgress: number
+    if (progress < 0.7) {
+      // Accelerating fall
+      easeProgress = (progress / 0.7) * (progress / 0.7)
+    } else {
+      // Slight bounce at the end
+      const bounceProgress = (progress - 0.7) / 0.3
+      const bounce = Math.sin(bounceProgress * Math.PI) * 0.02 // Small bounce
+      easeProgress = 1 - bounce
+    }
+    
+    const y = startY - (startY - endY) * Math.min(easeProgress, 1)
+    
+    // Penny spins around Y axis while falling flat (stays horizontal)
+    const spinRotation = progress * Math.PI * 4 // 2 full spins
+    
+    meshRef.current.position.y = y
+    meshRef.current.rotation.y = spinRotation
+    
+    // Animation complete - hide penny until next trigger
+    if (progress >= 1) {
+      setIsAnimating(false)
+      setVisible(false)
+    }
+  })
+  
+  // Penny lies flat (cylinder axis is vertical, so no rotation needed for flat orientation)
+  // Only visible during animation
+  if (!visible) return null
+  
+  return (
+    <mesh ref={meshRef} position={[0, startY, 0]}>
+      <cylinderGeometry args={[PENNY_RADIUS, PENNY_RADIUS, PENNY_THICKNESS, 16]} />
+      <meshStandardMaterial 
+        color={0xb87333} // Copper color
+        metalness={0.7}
+        roughness={0.2}
+        emissive={0xffaa44} // Warm orange glow
+        emissiveIntensity={0.8} // Strong glow for visibility
+      />
+    </mesh>
+  )
+}
+
+// Penny pile that grows over time - neat vertical stack
+function PennyPile({ 
+  position,
+  count
+}: { 
+  position: [number, number, number]
+  count: number
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null)
+  
+  // Stack pennies neatly in vertical columns
+  // When one column gets too tall, start a new one next to it
+  const maxPenniesPerStack = 100 // About 0.5 feet tall
+  
+  // Calculate penny positions - neat stacks
+  const pennyPositions = useMemo(() => {
+    const result = []
+    
+    for (let i = 0; i < count; i++) {
+      const stackIndex = Math.floor(i / maxPenniesPerStack)
+      const pennyInStack = i % maxPenniesPerStack
+      
+      // Arrange stacks in a row
+      const x = stackIndex * (PENNY_RADIUS * 2.2)
+      const y = pennyInStack * PENNY_THICKNESS + PENNY_THICKNESS / 2
+      const z = 0
+      
+      result.push({ x, y, z })
+    }
+    return result
+  }, [count])
+  
+  // Update instance matrices
+  useEffect(() => {
+    if (!meshRef.current || pennyPositions.length === 0) return
+    
+    const tempMatrix = new THREE.Matrix4()
+    // No rotation needed - cylinder already stands upright (flat penny)
+    const quaternion = new THREE.Quaternion()
+    
+    pennyPositions.forEach((pos, i) => {
+      tempMatrix.compose(
+        new THREE.Vector3(pos.x, pos.y, pos.z),
+        quaternion,
+        new THREE.Vector3(1, 1, 1)
+      )
+      meshRef.current!.setMatrixAt(i, tempMatrix)
+    })
+    meshRef.current.instanceMatrix.needsUpdate = true
+  }, [pennyPositions])
+  
+  // Calculate pile height (height of tallest stack)
+  const currentStackPennies = count % maxPenniesPerStack || (count > 0 ? maxPenniesPerStack : 0)
+  const pileHeight = currentStackPennies * PENNY_THICKNESS
+  
+  // X position for falling penny (lands on current stack)
+  const currentStackIndex = count > 0 ? Math.floor((count - 1) / maxPenniesPerStack) : 0
+  const fallingPennyX = currentStackIndex * (PENNY_RADIUS * 2.2)
+  
+  return (
+    <group position={position}>
+      {/* Pile of pennies - neat stacks */}
+      {count > 0 && (
+        <instancedMesh 
+          ref={meshRef} 
+          args={[undefined, undefined, count]}
+          castShadow
+        >
+          <cylinderGeometry args={[PENNY_RADIUS, PENNY_RADIUS, PENNY_THICKNESS, 16]} />
+          <meshStandardMaterial 
+            color={0xb87333} // Copper color
+            metalness={0.7}
+            roughness={0.2}
+            emissive={0xdd8833} // Warm copper glow
+            emissiveIntensity={0.5} // Visible glow on pile
+          />
+        </instancedMesh>
+      )}
+      
+      {/* Falling penny animation - only triggers when count increases */}
+      <group position={[fallingPennyX, 0, 0]}>
+        <FallingPenny 
+          startY={2}
+          endY={pileHeight + PENNY_THICKNESS / 2}
+          duration={1.2}
+          trigger={count}
+        />
+      </group>
+      
+      {/* Subtle point light to make penny pile glow */}
+      <pointLight
+        position={[0, pileHeight + 0.5, 0.5]}
+        color={0xffaa44}
+        intensity={0.8}
+        distance={3}
+        decay={2}
+      />
+      
+      {/* Label */}
+      <Billboard position={[0, pileHeight + 1, 0]}>
+        <Text
+          fontSize={0.3}
+          color="#b87333"
+          anchorX="center"
+          anchorY="bottom"
+          outlineWidth={0.02}
+          outlineColor="#000000"
+        >
+          {count} pennies
+        </Text>
+        <Text
+          fontSize={0.15}
+          color="#888888"
+          anchorX="center"
+          anchorY="top"
+          position={[0, -0.05, 0]}
+        >
+          ${(count * 0.01).toFixed(2)}
+        </Text>
+      </Billboard>
     </group>
   )
 }
@@ -528,28 +741,51 @@ function BillionCubeLabels({
 function CameraController({ 
   controlsRef, 
   cameraDistance,
-  resetTrigger
+  resetTrigger,
+  cameraTargetX = 0,
+  cameraTargetY = HUMAN_HEIGHT / 2,
+  isBillionaire = true
 }: { 
   controlsRef: React.RefObject<OrbitControlsImpl | null>
   cameraDistance: number
   resetTrigger: number
+  cameraTargetX?: number
+  cameraTargetY?: number
+  isBillionaire?: boolean
 }) {
   const { camera } = useThree()
+  
+  // Set initial camera target on mount
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.target.set(cameraTargetX, cameraTargetY, 0)
+      controlsRef.current.update()
+    }
+  }, [controlsRef, cameraTargetX, cameraTargetY])
   
   // Reset camera when trigger changes
   useEffect(() => {
     if (resetTrigger > 0 && controlsRef.current) {
-      // Reset camera position
-      camera.position.set(
-        cameraDistance * 0.7,
-        cameraDistance * 0.4,
-        cameraDistance * 0.7
-      )
-      // Reset target to human center
-      controlsRef.current.target.set(0, HUMAN_HEIGHT / 2, 0)
+      // Reset camera position based on view type
+      if (isBillionaire) {
+        camera.position.set(
+          cameraDistance * 0.7,
+          cameraDistance * 0.4,
+          cameraDistance * 0.7
+        )
+      } else {
+        // Average household: show full person with penny pile
+        camera.position.set(
+          cameraDistance * 0.6,
+          cameraDistance * 0.35,
+          cameraDistance * 0.6
+        )
+      }
+      // Reset target
+      controlsRef.current.target.set(cameraTargetX, cameraTargetY, 0)
       controlsRef.current.update()
     }
-  }, [resetTrigger, camera, cameraDistance, controlsRef])
+  }, [resetTrigger, camera, cameraDistance, controlsRef, cameraTargetX, cameraTargetY, isBillionaire])
   
   return null
 }
@@ -558,12 +794,14 @@ function CameraController({
 function Scene({ 
   profile, 
   growthBricks, 
+  growthPennies,
   startingWealth,
   controlsRef,
   resetTrigger
 }: { 
   profile: WealthProfile
   growthBricks: number
+  growthPennies: number
   startingWealth: number
   controlsRef: React.RefObject<OrbitControlsImpl | null>
   resetTrigger: number
@@ -580,12 +818,18 @@ function Scene({
     ? Math.min(billionCount, 5) * BILLION_CUBE_SIZE * 1.3
     : Math.min(Math.ceil(startingBrickCount / 50), 10) * THOUSAND_BRICK.width * 1.2
   
-  // Camera distance - always start focused on human (same for billionaire and non-billionaire)
-  // User can zoom out to see the wealth cubes
-  const cameraDistance = 15 // Close enough to see the human clearly
+  // Camera distance - different for billionaire vs average household
+  // Billionaire: focused on human, user can zoom out to see wealth cubes
+  // Average household: zoomed in showing full person with penny pile visible
+  const cameraDistance = isBillionaire ? 15 : 12 // Show full person for average household
   const groundSize = isBillionaire 
     ? Math.max(100, gridWidth * 2, billionCount * 15)
     : Math.max(30, gridWidth * 4)
+  
+  // Camera target position - where the camera looks at
+  // For average household, look at about waist height to show both person and penny pile
+  const cameraTargetY = isBillionaire ? HUMAN_HEIGHT * 0.5 : HUMAN_HEIGHT * 0.4
+  const cameraTargetX = isBillionaire ? 0 : HUMAN_HEIGHT * 0.3 // Slight offset toward penny pile
 
   // Wealth display position (to the LEFT of the human, who is at center)
   const wealthX = isBillionaire ? -(gridWidth / 2 + 15) : -(gridWidth / 2 + 3)
@@ -597,12 +841,19 @@ function Scene({
         controlsRef={controlsRef} 
         cameraDistance={cameraDistance}
         resetTrigger={resetTrigger}
+        cameraTargetX={cameraTargetX}
+        cameraTargetY={cameraTargetY}
+        isBillionaire={isBillionaire}
       />
       
-      {/* Camera - looking at human at origin */}
+      {/* Camera - positioned based on view type */}
       <PerspectiveCamera
         makeDefault
-        position={[cameraDistance * 0.7, cameraDistance * 0.4, cameraDistance * 0.7]}
+        position={
+          isBillionaire 
+            ? [cameraDistance * 0.7, cameraDistance * 0.4, cameraDistance * 0.7]
+            : [cameraDistance * 0.6, cameraDistance * 0.35, cameraDistance * 0.6]
+        }
         fov={50}
       />
       
@@ -669,42 +920,53 @@ function Scene({
         heightLabel={isBillionaire ? "6'2\"" : "5'8\""}
       />
       
-      {/* Growth pile next to human (to the right) */}
-      {growthBricks > 0 && (
-        <ThousandDollarPile
+      {/* Growth visualization - different for billionaires vs average household */}
+      {isBillionaire ? (
+        // Billionaires: Show $1K brick pile (grows fast)
+        growthBricks > 0 && (
+          <ThousandDollarPile
+            position={[HUMAN_HEIGHT * 0.8, 0, 0]}
+            count={growthBricks}
+            newestIndex={growthBricks - 1}
+            label={`+$${(growthBricks * 1000).toLocaleString()}`}
+            labelColor="#00ff00"
+          />
+        )
+      ) : (
+        // Average household: Show penny pile with falling animation (grows slow)
+        <PennyPile
           position={[HUMAN_HEIGHT * 0.8, 0, 0]}
-          count={growthBricks}
-          newestIndex={growthBricks - 1}
-          label={`+$${(growthBricks * 1000).toLocaleString()}`}
-          labelColor="#00ff00"
+          count={growthPennies}
         />
       )}
       
-      {/* Reference $1K brick with label (behind the human) */}
-      <group position={[0, 0, -HUMAN_HEIGHT * 0.5]}>
-        <ThousandDollarBrick position={[0, THOUSAND_BRICK.height / 2, 0]} />
-        <Billboard position={[0, THOUSAND_BRICK.height + 0.4, 0]}>
-          <Text
-            fontSize={0.25}
-            color="#00e436"
-            anchorX="center"
-            anchorY="bottom"
-            outlineWidth={0.01}
-            outlineColor="#000000"
-          >
-            $1,000
-          </Text>
-          <Text
-            fontSize={0.12}
-            color="#666666"
-            anchorX="center"
-            anchorY="top"
-            position={[0, -0.03, 0]}
-          >
-            (10 x $100 bills)
-          </Text>
-        </Billboard>
-      </group>
+      {/* Reference $1K brick with label (behind the human) - only for billionaires */}
+      {isBillionaire && (
+        <group position={[0, 0, -HUMAN_HEIGHT * 0.5]}>
+          <ThousandDollarBrick position={[0, THOUSAND_BRICK.height / 2, 0]} />
+          <Billboard position={[0, THOUSAND_BRICK.height + 0.4, 0]}>
+            <Text
+              fontSize={0.25}
+              color="#00e436"
+              anchorX="center"
+              anchorY="bottom"
+              outlineWidth={0.01}
+              outlineColor="#000000"
+            >
+              $1,000
+            </Text>
+            <Text
+              fontSize={0.12}
+              color="#666666"
+              anchorX="center"
+              anchorY="top"
+              position={[0, -0.03, 0]}
+            >
+              (10 x $100 bills)
+            </Text>
+          </Billboard>
+        </group>
+      )}
 
       {/* Billion dollar cubes showing net worth (for billionaires) - to the LEFT */}
       {/* Uses INSTANCED rendering for massive performance boost */}
@@ -754,13 +1016,16 @@ function Scene({
 
 // Main component with Canvas wrapper
 const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProps) {
-  const { displayWealth, startingWealth, growthAmount, growthBricks } = useWealthAnimation(profile)
+  const { displayWealth, startingWealth, growthAmount, growthBricks, growthPennies } = useWealthAnimation(profile)
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const [resetTrigger, setResetTrigger] = useState(0)
   
   const handleResetView = useCallback(() => {
     setResetTrigger(prev => prev + 1)
   }, [])
+  
+  // Check if billionaire based on starting wealth
+  const isBillionaire = startingWealth >= 1_000_000_000
 
   return (
     <div className="flex flex-col items-center p-4">
@@ -787,7 +1052,11 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
           {formatPerSecond(profile.dailyIncrease)}
         </div>
         <div className="text-[6px] md:text-[8px] text-nes-cyan">
-          +{formatCurrency(growthAmount)} (+{growthBricks.toLocaleString()} x $1K)
+          {isBillionaire ? (
+            <>+{formatCurrency(growthAmount)} (+{growthBricks.toLocaleString()} x $1K)</>
+          ) : (
+            <>+{formatCurrency(growthAmount)} (+{growthPennies.toLocaleString()} pennies)</>
+          )}
         </div>
       </div>
 
@@ -806,7 +1075,8 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
           <Suspense fallback={null}>
             <Scene 
               profile={profile} 
-              growthBricks={growthBricks} 
+              growthBricks={growthBricks}
+              growthPennies={growthPennies}
               startingWealth={startingWealth}
               controlsRef={controlsRef}
               resetTrigger={resetTrigger}

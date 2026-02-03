@@ -93,40 +93,30 @@ export async function GET(request: Request) {
       )
     }
 
-    // Parse net worth - Forbes API uses 'finalWorth' in millions
-    // Try multiple possible field names the API might use
-    let netWorthDollars: number | null = null
-    
-    // Cast to any to check all possible fields
+    // Parse net worth - Forbes API uses 'current_worth' in billions
+    // Cast to access dynamic fields
     const apiData = elonData as unknown as Record<string, unknown>
     
-    // Try 'finalWorth' first (in millions) - this is what Forbes typically uses
-    if (typeof apiData.finalWorth === 'number') {
+    let netWorthDollars: number | null = null
+    
+    // Forbes API returns 'current_worth' in billions (e.g., 851.1 = $851.1B)
+    if (typeof apiData.current_worth === 'number') {
+      netWorthDollars = apiData.current_worth * 1_000_000_000
+    }
+    // Fallback: try other possible field names
+    else if (typeof apiData.finalWorth === 'number') {
       netWorthDollars = apiData.finalWorth * 1_000_000
     }
-    // Try 'netWorth' (could be billions or raw)
     else if (typeof apiData.netWorth === 'number') {
-      // If it's a small number, assume billions
-      netWorthDollars = apiData.netWorth < 10000 
-        ? apiData.netWorth * 1_000_000_000 
-        : apiData.netWorth
-    }
-    // Try parsing from string
-    else if (apiData.finalWorth || apiData.netWorth) {
-      const worthStr = String(apiData.finalWorth || apiData.netWorth)
-      const parsed = parseFloat(worthStr.replace(/[^0-9.]/g, ''))
-      if (!isNaN(parsed)) {
-        // Assume millions if parsing finalWorth
-        netWorthDollars = apiData.finalWorth ? parsed * 1_000_000 : parsed * 1_000_000_000
-      }
+      netWorthDollars = apiData.netWorth * 1_000_000_000
     }
     
     // Log the raw API response for debugging
     console.log('[Cron] Raw API fields:', {
-      finalWorth: apiData.finalWorth,
-      netWorth: apiData.netWorth,
-      personName: apiData.personName,
+      current_worth: apiData.current_worth,
+      name: apiData.name,
       rank: apiData.rank,
+      worth_as_of: apiData.worth_as_of,
     })
 
     // If we couldn't parse net worth, return debug info
@@ -144,11 +134,11 @@ export async function GET(request: Request) {
     const wealthData: WealthCache = {
       elonMusk: {
         id: 'elon-musk',
-        name: String(apiData.personName || apiData.name || 'Elon Musk'),
+        name: String(apiData.name || 'Elon Musk'),
         netWorth: netWorthDollars,
-        rank: (apiData.rank || apiData.position) as number | undefined,
+        rank: typeof apiData.rank === 'number' ? apiData.rank : 1,
         source: 'Forbes Billionaires API',
-        lastUpdated: new Date().toISOString(),
+        lastUpdated: String(apiData.worth_as_of || new Date().toISOString()),
       },
       updatedAt: new Date().toISOString(),
     }

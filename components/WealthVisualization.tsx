@@ -37,20 +37,15 @@ function EducationToggle({
     <div className="flex flex-col items-center gap-2 p-3 pixel-border-dark bg-nes-black/80 rounded">
       <button
         onClick={onToggle}
-        className={`
-          relative w-12 h-6 rounded-full transition-colors duration-200
-          ${enabled ? 'bg-nes-purple' : 'bg-nes-gray'}
-          focus:outline-none focus:ring-2 focus:ring-nes-purple focus:ring-offset-2 focus:ring-offset-nes-black
-        `}
+        className="relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-nes-purple focus:ring-offset-2 focus:ring-offset-nes-black"
+        style={{ backgroundColor: enabled ? '#7e2553' : '#4a4a68' }}
         role="switch"
         aria-checked={enabled}
         aria-label="Show California Education Budget comparison"
       >
         <span
-          className={`
-            absolute top-1 left-1 w-4 h-4 rounded-full bg-nes-white transition-transform duration-200
-            ${enabled ? 'translate-x-6' : 'translate-x-0'}
-          `}
+          className="absolute top-1 left-1 w-4 h-4 rounded-full bg-nes-white transition-transform duration-200"
+          style={{ transform: enabled ? 'translateX(24px)' : 'translateX(0)' }}
         />
       </button>
       <div className="text-center">

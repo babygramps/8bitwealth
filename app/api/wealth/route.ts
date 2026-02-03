@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server'
 import { getWealthCache, isRedisConfigured } from '@/lib/wealth-cache'
-import { WEALTH_PROFILES } from '@/lib/wealth-data'
+import { BILLIONAIRES } from '@/lib/wealth-data'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -25,7 +25,7 @@ export async function GET() {
     }
     
     // Fall back to static data from wealth-data.ts
-    const muskProfile = WEALTH_PROFILES.find(p => p.id === 'musk')
+    const muskProfile = BILLIONAIRES.find(p => p.id === 'musk')
     
     console.log('[Wealth API] Returning fallback data (no cache)')
     return NextResponse.json({

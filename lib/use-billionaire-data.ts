@@ -12,6 +12,23 @@ interface UseBillionaireDataResult {
   refetch: () => void
 }
 
+// Response type from our /api/wealth endpoint
+interface WealthApiResponse {
+  success: boolean
+  source: 'cache' | 'fallback'
+  data: {
+    elonMusk: {
+      id: string
+      name: string
+      netWorth: number
+      rank?: number
+      source: string
+      lastUpdated: string
+    }
+    updatedAt: string
+  }
+}
+
 // Style mappings for each billionaire (not available from API)
 const BILLIONAIRE_STYLES: Record<BillionaireId, Pick<WealthProfile, 'emoji' | 'color' | 'accentColor' | 'hexColor' | 'brickValue'>> = {
   musk: {
@@ -50,31 +67,65 @@ export function useBillionaireData(): UseBillionaireDataResult {
     setIsLoading(true)
     setError(null)
 
-    console.log('[useBillionaireData] Fetching data from RTB-API...')
+    console.log('[useBillionaireData] Fetching data...')
 
     try {
+      // First, try to get cached Forbes API data from our endpoint
+      let muskNetWorth: number | null = null
+      let muskDataSource: string = 'fallback'
+      
+      try {
+        const response = await fetch('/api/wealth')
+        if (response.ok) {
+          const wealthData: WealthApiResponse = await response.json()
+          if (wealthData.success && wealthData.data?.elonMusk?.netWorth) {
+            muskNetWorth = wealthData.data.elonMusk.netWorth
+            muskDataSource = wealthData.source
+            console.log(`[useBillionaireData] Got Elon's wealth from ${muskDataSource}: $${(muskNetWorth / 1e9).toFixed(1)}B`)
+          }
+        }
+      } catch (apiErr) {
+        console.warn('[useBillionaireData] Could not fetch from /api/wealth:', apiErr)
+      }
+
       const billionaireIds: BillionaireId[] = ['musk', 'bezos', 'zuckerberg']
       
       // Fetch all billionaires in parallel
       const results = await Promise.all(
         billionaireIds.map(async (id) => {
-          const uri = BILLIONAIRE_URIS[id]
           const fallback = BILLIONAIRES_FALLBACK.find(b => b.id === id)!
+          const styles = BILLIONAIRE_STYLES[id]
+          
+          // For Musk, use cached Forbes data if available
+          if (id === 'musk' && muskNetWorth) {
+            const profile: WealthProfile = {
+              id,
+              name: 'Elon Musk',
+              netWorth: muskNetWorth,
+              startingWealth: muskNetWorth,
+              dailyIncrease: fallback.dailyIncrease, // Keep using estimated daily increase
+              isLiveData: muskDataSource === 'cache',
+              ...styles,
+            }
+            console.log(`[useBillionaireData] musk: Using Forbes cached data - $${(muskNetWorth / 1e9).toFixed(1)}B`)
+            return profile
+          }
+          
+          // For others, try RTB-API (currently disabled, will use fallback)
+          const uri = BILLIONAIRE_URIS[id]
           const data = await fetchBillionaireData(uri, fallback.name)
           
           if (data) {
-            // Merge API data with styles
-            const styles = BILLIONAIRE_STYLES[id]
             const profile: WealthProfile = {
               id,
               name: data.name,
               netWorth: data.netWorth,
-              startingWealth: data.netWorth, // Set starting wealth to current net worth
+              startingWealth: data.netWorth,
               dailyIncrease: data.dailyIncrease > 0 ? data.dailyIncrease : fallback.dailyIncrease,
               isLiveData: true,
               ...styles,
             }
-            console.log(`[useBillionaireData] ${id}: Net worth $${(data.netWorth / 1e9).toFixed(1)}B, Daily increase $${data.dailyIncrease.toLocaleString()}`)
+            console.log(`[useBillionaireData] ${id}: Net worth $${(data.netWorth / 1e9).toFixed(1)}B`)
             return profile
           }
           
@@ -88,7 +139,6 @@ export function useBillionaireData(): UseBillionaireDataResult {
     } catch (err) {
       console.error('[useBillionaireData] Failed to fetch data:', err)
       setError(err instanceof Error ? err : new Error('Failed to fetch billionaire data'))
-      // Keep using fallback data
       setProfiles(BILLIONAIRES_FALLBACK)
     } finally {
       setIsLoading(false)

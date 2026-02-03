@@ -38,9 +38,8 @@ function EducationToggle({
       <button
         onClick={onToggle}
         className={`
-          relative w-14 h-7 rounded-full transition-colors duration-200
+          relative w-12 h-6 rounded-full transition-colors duration-200
           ${enabled ? 'bg-nes-purple' : 'bg-nes-gray'}
-          border-2 border-nes-darkgray
           focus:outline-none focus:ring-2 focus:ring-nes-purple focus:ring-offset-2 focus:ring-offset-nes-black
         `}
         role="switch"
@@ -49,8 +48,8 @@ function EducationToggle({
       >
         <span
           className={`
-            absolute top-0.5 w-5 h-5 rounded-full bg-nes-white transition-transform duration-200
-            ${enabled ? 'translate-x-7' : 'translate-x-0.5'}
+            absolute top-1 left-1 w-4 h-4 rounded-full bg-nes-white transition-transform duration-200
+            ${enabled ? 'translate-x-6' : 'translate-x-0'}
           `}
         />
       </button>

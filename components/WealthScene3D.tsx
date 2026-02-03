@@ -3,13 +3,14 @@
 import { memo, Suspense, useMemo, useRef, useEffect, useState, useCallback } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Text, Billboard, Instances, Instance, Cylinder } from '@react-three/drei'
-import { WealthProfile, formatCurrency, formatPerSecond, MAX_BRICKS_PER_PILE } from '@/lib/wealth-data'
+import { WealthProfile, formatCurrency, formatPerSecond, MAX_BRICKS_PER_PILE, CALIFORNIA_EDUCATION } from '@/lib/wealth-data'
 import { useWealthAnimation } from '@/lib/use-wealth-animation'
 import * as THREE from 'three'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 
 interface WealthScene3DProps {
   profile: WealthProfile
+  showEducation?: boolean
 }
 
 // REAL SCALE CALCULATIONS
@@ -642,6 +643,96 @@ function BillionCubeGridInstanced({
   )
 }
 
+// INSTANCED Grid for California Education Budget - Purple cubes
+// Shows $1B cubes in a different color to compare with billionaire wealth
+function EducationCubeGridInstanced({ 
+  billionCount, 
+  color,
+  label
+}: { 
+  billionCount: number
+  color: number
+  label: string
+}) {
+  const meshRef = useRef<THREE.InstancedMesh>(null)
+  const size = BILLION_CUBE_SIZE
+  const spacing = size * 1.3
+  const maxPerRow = 5
+  
+  // Calculate positions for all cubes
+  const positions = useMemo(() => {
+    const result = []
+    for (let i = 0; i < billionCount; i++) {
+      const row = Math.floor(i / maxPerRow)
+      const col = i % maxPerRow
+      const offsetX = ((billionCount > maxPerRow ? maxPerRow : billionCount) - 1) * spacing / 2
+      const x = col * spacing - offsetX
+      const z = row * spacing
+      result.push({ x, y: size / 2, z, index: i + 1 })
+    }
+    return result
+  }, [billionCount, spacing])
+
+  // Set up instance matrices
+  useEffect(() => {
+    if (!meshRef.current) return
+    
+    const tempMatrix = new THREE.Matrix4()
+    positions.forEach((pos, i) => {
+      tempMatrix.setPosition(pos.x, pos.y, pos.z)
+      meshRef.current!.setMatrixAt(i, tempMatrix)
+    })
+    meshRef.current.instanceMatrix.needsUpdate = true
+  }, [positions])
+
+  // Calculate grid dimensions for label positioning
+  const numRows = Math.ceil(billionCount / maxPerRow)
+  const gridDepth = numRows * spacing
+
+  return (
+    <group>
+      {/* Instanced cubes - single draw call for ALL cubes */}
+      <instancedMesh 
+        ref={meshRef} 
+        args={[undefined, undefined, billionCount]}
+        castShadow
+        receiveShadow
+      >
+        <boxGeometry args={[size, size, size]} />
+        <meshStandardMaterial 
+          color={color} 
+          flatShading 
+          emissive={color}
+          emissiveIntensity={0.15}
+        />
+      </instancedMesh>
+      
+      {/* Label for education budget */}
+      <Billboard position={[0, size + 3, gridDepth / 2 - spacing / 2]}>
+        <Text
+          fontSize={1.2}
+          color="#ff77a8"
+          anchorX="center"
+          anchorY="bottom"
+          outlineWidth={0.05}
+          outlineColor="#000000"
+        >
+          {label}
+        </Text>
+        <Text
+          fontSize={0.5}
+          color="#888888"
+          anchorX="center"
+          anchorY="top"
+          position={[0, -0.1, 0]}
+        >
+          📚 CA Education ({billionCount} billion dollar cubes)
+        </Text>
+      </Billboard>
+    </group>
+  )
+}
+
 // Camera controller component with reset functionality
 function CameraController({ 
   controlsRef, 
@@ -718,7 +809,8 @@ function Scene({
   growthPennies,
   startingWealth,
   controlsRef,
-  resetTrigger
+  resetTrigger,
+  showEducation = false
 }: { 
   profile: WealthProfile
   growthBricks: number
@@ -726,6 +818,7 @@ function Scene({
   startingWealth: number
   controlsRef: React.RefObject<OrbitControlsImpl | null>
   resetTrigger: number
+  showEducation?: boolean
 }) {
   // Calculate number of billion dollar cubes (for billionaires)
   const billionCount = Math.floor(startingWealth / 1_000_000_000)
@@ -929,6 +1022,17 @@ function Scene({
         />
       )}
 
+      {/* California Education Budget - Purple cubes to the RIGHT (only for billionaires) */}
+      {isBillionaire && showEducation && (
+        <group position={[-wealthX, 0, 0]}>
+          <EducationCubeGridInstanced 
+            billionCount={Math.floor(CALIFORNIA_EDUCATION.totalBudget / 1_000_000_000)} 
+            color={CALIFORNIA_EDUCATION.hexColor}
+            label={formatCurrency(CALIFORNIA_EDUCATION.totalBudget)}
+          />
+        </group>
+      )}
+
       {/* Grid helper */}
       <gridHelper args={[groundSize, Math.floor(groundSize / 10)]} position={[0, 0.01, 0]} />
     </>
@@ -936,7 +1040,7 @@ function Scene({
 }
 
 // Main component with Canvas wrapper
-const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProps) {
+const WealthScene3D = memo(function WealthScene3D({ profile, showEducation = false }: WealthScene3DProps) {
   const { displayWealth, startingWealth, growthAmount, growthBricks, growthPennies } = useWealthAnimation(profile)
   const controlsRef = useRef<OrbitControlsImpl>(null)
   const [resetTrigger, setResetTrigger] = useState(0)
@@ -959,9 +1063,9 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
         >
           {profile.name}
         </h3>
-        {profile.isLiveData && (
+        {profile.isLiveData ? (
           <span className="text-[5px] text-nes-green ml-1">● LIVE</span>
-        )}
+        ) : null}
       </div>
 
       {/* Wealth stats */}
@@ -980,6 +1084,18 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
           )}
         </div>
       </div>
+
+      {/* Education comparison callout when enabled */}
+      {showEducation && isBillionaire ? (
+        <div className="text-center mb-4 px-3 py-2 pixel-border-dark bg-nes-purple/20 rounded">
+          <div className="text-[7px] md:text-[9px] text-nes-pink">
+            📚 Purple cubes = CA Education Budget ({formatCurrency(CALIFORNIA_EDUCATION.totalBudget)}/year)
+          </div>
+          <div className="text-[5px] md:text-[7px] text-nes-gray mt-1">
+            Musk&apos;s wealth could fund CA schools for {Math.floor(startingWealth / CALIFORNIA_EDUCATION.totalBudget)} years
+          </div>
+        </div>
+      ) : null}
 
       {/* 3D Canvas with reset button */}
       <div className="relative w-full h-[400px] md:h-[500px] pixel-border-dark bg-nes-black/50 rounded overflow-hidden">
@@ -1001,6 +1117,7 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
               startingWealth={startingWealth}
               controlsRef={controlsRef}
               resetTrigger={resetTrigger}
+              showEducation={showEducation}
             />
           </Suspense>
         </Canvas>
@@ -1008,7 +1125,12 @@ const WealthScene3D = memo(function WealthScene3D({ profile }: WealthScene3DProp
 
       {/* Legend and controls hint */}
       <div className="mt-2 text-[6px] text-nes-gray text-center space-y-1">
-        <div>Giant cubes = $1B each | Brick stacks = $1K each (10 x $100 bills) | All real scale!</div>
+        <div>
+          🟢 Green cubes = $1B each | Brick stacks = $1K each (10 x $100 bills) | All real scale!
+          {showEducation && isBillionaire ? (
+            <span className="text-nes-pink"> | 🟣 Purple cubes = CA Education ($1B each)</span>
+          ) : null}
+        </div>
         <div className="text-[5px] text-nes-cyan">
           🖱️ Drag to rotate | Right-click drag to pan | Scroll to zoom | 📱 1 finger rotate, 2 fingers pan/zoom
         </div>

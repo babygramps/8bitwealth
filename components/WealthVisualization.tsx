@@ -1,6 +1,8 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import { useBillionaireData } from '@/lib/use-billionaire-data'
+import { CALIFORNIA_EDUCATION, formatCurrency } from '@/lib/wealth-data'
 import WealthScene3D from './WealthScene3D'
 
 // Loading skeleton for a single wealth scene
@@ -23,8 +25,55 @@ function LoadingSkeleton() {
   )
 }
 
+// Toggle switch for showing education comparison
+function EducationToggle({ 
+  enabled, 
+  onToggle 
+}: { 
+  enabled: boolean
+  onToggle: () => void 
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 p-3 pixel-border-dark bg-nes-black/80 rounded">
+      <button
+        onClick={onToggle}
+        className={`
+          relative w-14 h-7 rounded-full transition-colors duration-200
+          ${enabled ? 'bg-nes-purple' : 'bg-nes-gray'}
+          border-2 border-nes-darkgray
+          focus:outline-none focus:ring-2 focus:ring-nes-purple focus:ring-offset-2 focus:ring-offset-nes-black
+        `}
+        role="switch"
+        aria-checked={enabled}
+        aria-label="Show California Education Budget comparison"
+      >
+        <span
+          className={`
+            absolute top-0.5 w-5 h-5 rounded-full bg-nes-white transition-transform duration-200
+            ${enabled ? 'translate-x-7' : 'translate-x-0.5'}
+          `}
+        />
+      </button>
+      <div className="text-center">
+        <div className="text-[8px] md:text-[10px] text-nes-purple font-pixel">
+          📚 CA Education Budget
+        </div>
+        <div className="text-[6px] text-nes-gray">
+          {formatCurrency(CALIFORNIA_EDUCATION.totalBudget)} annual
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function WealthVisualization() {
   const { profiles, averageAmerican, isLoading, error } = useBillionaireData()
+  const [showEducation, setShowEducation] = useState(false)
+  
+  // Use functional setState for stable callback (rerender-functional-setstate)
+  const handleToggleEducation = useCallback(() => {
+    setShowEducation(prev => !prev)
+  }, [])
   
   // Just get Elon Musk for performance
   const elonMusk = profiles.find(p => p.id === 'musk') || profiles[0]
@@ -32,13 +81,21 @@ export default function WealthVisualization() {
   return (
     <div className="px-4 pb-8">
       {/* Error indicator (subtle, doesn't block UI) */}
-      {error && (
+      {error ? (
         <div className="text-center mb-4">
           <span className="text-[6px] text-nes-orange">
             Using estimated data (API unavailable)
           </span>
         </div>
-      )}
+      ) : null}
+
+      {/* Education Toggle Control */}
+      <div className="flex justify-center mb-6">
+        <EducationToggle 
+          enabled={showEducation} 
+          onToggle={handleToggleEducation} 
+        />
+      </div>
 
       {/* Elon Musk section */}
       <div className="mb-8">
@@ -49,7 +106,7 @@ export default function WealthVisualization() {
           {isLoading ? (
             <LoadingSkeleton />
           ) : (
-            <WealthScene3D profile={elonMusk} />
+            <WealthScene3D profile={elonMusk} showEducation={showEducation} />
           )}
         </div>
       </div>

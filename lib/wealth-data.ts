@@ -122,3 +122,32 @@ export function calculateBricks(wealth: number, brickValue: number): number {
 
 // Max bricks per pile before starting new column
 export const MAX_BRICKS_PER_PILE = 20
+
+// California Education Budget Data (2025-26)
+// Source: California Governor's Budget 2025-26
+// K-12 Education (Proposition 98): $118.9 billion
+// Higher Education (UC, CSU, Community Colleges): $45.1 billion
+// Total: ~$164 billion
+export interface EducationData {
+  id: string
+  name: string
+  emoji: string
+  totalBudget: number
+  k12Budget: number
+  higherEdBudget: number
+  color: string
+  accentColor: string
+  hexColor: number
+}
+
+export const CALIFORNIA_EDUCATION: EducationData = {
+  id: 'ca-education',
+  name: 'California Education Budget',
+  emoji: '📚',
+  totalBudget: 164_000_000_000, // $164 billion total
+  k12Budget: 118_900_000_000, // $118.9 billion K-12
+  higherEdBudget: 45_100_000_000, // $45.1 billion higher ed
+  color: 'bg-nes-purple',
+  accentColor: '#7e2553',
+  hexColor: 0x7e2553,
+}

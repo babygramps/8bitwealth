@@ -1,9 +1,15 @@
+'use client'
+
+import { useState } from 'react'
 import Header from '@/components/Header'
 import Starfield from '@/components/Starfield'
 import WealthVisualization from '@/components/WealthVisualization'
 import StatsPanel from '@/components/StatsPanel'
+import DataSourcesModal from '@/components/DataSourcesModal'
 
 export default function Home() {
+  const [isDataSourcesOpen, setIsDataSourcesOpen] = useState(false)
+
   return (
     <main className="relative min-h-screen pb-32">
       {/* Animated background */}
@@ -14,7 +20,7 @@ export default function Home() {
       
       {/* Main content */}
       <div className="relative z-20">
-        <Header />
+        <Header onOpenDataSources={() => setIsDataSourcesOpen(true)} />
         
         {/* Intro text */}
         <div className="text-center py-6 px-4 max-w-3xl mx-auto">
@@ -31,6 +37,12 @@ export default function Home() {
       
       {/* Fixed stats panel at bottom */}
       <StatsPanel />
+
+      {/* Data Sources Modal */}
+      <DataSourcesModal 
+        isOpen={isDataSourcesOpen} 
+        onClose={() => setIsDataSourcesOpen(false)} 
+      />
     </main>
   )
 }

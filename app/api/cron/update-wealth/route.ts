@@ -59,16 +59,25 @@ async function fetchFromForbesAPI(id: string): Promise<ForbesBillionaireResponse
 }
 
 export async function GET(request: Request) {
-  // Verify the request is from Vercel Cron (or allow in development)
+  // Vercel Cron jobs automatically include CRON_SECRET in the Authorization header
+  // For manual testing, we allow requests without auth OR with correct CRON_SECRET
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
   
-  // In production, verify the cron secret
-  if (process.env.NODE_ENV === 'production' && cronSecret) {
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      console.error('[Cron] Unauthorized request')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  // Check if this is a Vercel cron request (they set a specific header)
+  const isVercelCron = request.headers.get('x-vercel-cron') === '1'
+  
+  // Allow if: 
+  // 1. It's a Vercel cron request
+  // 2. No CRON_SECRET is configured (open access)
+  // 3. Correct CRON_SECRET is provided
+  const isAuthorized = isVercelCron || 
+    !cronSecret || 
+    authHeader === `Bearer ${cronSecret}`
+  
+  if (!isAuthorized) {
+    console.error('[Cron] Unauthorized request - missing or invalid CRON_SECRET')
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   console.log('[Cron] Starting monthly wealth update...')
